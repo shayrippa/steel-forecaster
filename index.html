@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STEELCAST — Structural Steel Installation Forecaster</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <path d="M4 6h24v4l-8 4 8 4v4H4v-4l8-4-8-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <div class="brand__text">
+        <span class="brand__name">STEELCAST</span>
+        <span class="brand__tag">Structural steel installation forecaster</span>
+      </div>
+    </div>
+    <div class="topbar__actions">
+      <button id="loadSample" class="btn btn--ghost" type="button">Load sample project</button>
+      <button id="reset" class="btn btn--ghost" type="button">Reset</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ─────────── CONTROL COLUMN ─────────── -->
+    <aside class="panel panel--controls">
+      <section class="block">
+        <h2 class="block__title"><span class="block__idx">A</span>Project scope</h2>
+
+        <div class="import">
+          <label class="import__drop" id="ifcDrop">
+            <input id="ifcFile" type="file" accept=".ifc" hidden />
+            <span class="import__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 16V5M8 9l4-4 4 4M5 19h14"/>
+              </svg>
+            </span>
+            <span class="import__text"><strong>Import from IFC model</strong><br/>Derive the steel roofing area straight from the BIM file</span>
+          </label>
+          <div class="import__opts">
+            <label for="roofLevel">Roof level ≥</label>
+            <input id="roofLevel" type="number" value="19" step="0.5" min="0" />
+            <span class="import__unit">m</span>
+          </div>
+          <div id="ifcResult" class="import__result" hidden></div>
+        </div>
+
+        <div class="field">
+          <label for="projName">Project name</label>
+          <input id="projName" type="text" placeholder="e.g. North Tower — Rebar Package" />
+        </div>
+        <div class="field">
+          <label for="area">Total installation area <span class="unit">m²</span></label>
+          <input id="area" type="number" min="1" step="1" inputmode="numeric" placeholder="12000" />
+        </div>
+        <div class="field field--split">
+          <div>
+            <label for="start">Start date</label>
+            <input id="start" type="date" />
+          </div>
+          <div>
+            <label for="deadline">Contract deadline</label>
+            <input id="deadline" type="date" />
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2 class="block__title"><span class="block__idx">B</span>Project journal</h2>
+        <p class="block__hint">Log the area fixed each working day. The forecast recomputes on every entry.</p>
+        <form id="entryForm" class="entry">
+          <div class="entry__row">
+            <div class="field">
+              <label for="entryDate">Date</label>
+              <input id="entryDate" type="date" required />
+            </div>
+            <div class="field">
+              <label for="entryAmount">Installed <span class="unit">m²</span></label>
+              <input id="entryAmount" type="number" min="0" step="1" inputmode="numeric" placeholder="320" required />
+            </div>
+          </div>
+          <button class="btn btn--solid" type="submit">Log day</button>
+        </form>
+        <div class="journal">
+          <div class="journal__head">
+            <span>Date</span><span>Day m²</span><span>Cumulative</span><span></span>
+          </div>
+          <ul id="journalList" class="journal__list"></ul>
+          <p id="journalEmpty" class="journal__empty">No entries yet — log your first day to start forecasting.</p>
+        </div>
+      </section>
+    </aside>
+
+    <!-- ─────────── FORECAST STAGE ─────────── -->
+    <section class="stage">
+      <div id="verdict" class="verdict verdict--idle">
+        <div class="verdict__signal" aria-hidden="true"></div>
+        <div class="verdict__body">
+          <span id="verdictLabel" class="verdict__label">Awaiting data</span>
+          <span id="verdictDetail" class="verdict__detail">Set the scope and log at least two days to generate a forecast.</span>
+        </div>
+        <div class="verdict__delta">
+          <span id="verdictDelta" class="verdict__deltaNum">—</span>
+          <span class="verdict__deltaUnit">vs deadline</span>
+        </div>
+      </div>
+
+      <figure class="chart">
+        <figcaption class="chart__cap">
+          <span class="chart__title">Installation S-curve</span>
+          <span class="chart__legend">
+            <i class="key key--plan"></i>Planned baseline
+            <i class="key key--actual"></i>Actual installed
+            <i class="key key--fc"></i>Forecast
+            <i class="key key--dl"></i>Deadline
+          </span>
+        </figcaption>
+        <div id="chart" class="chart__canvas"></div>
+      </figure>
+
+      <div class="readouts" id="readouts">
+        <div class="readout">
+          <span class="readout__k">Fixing rate</span>
+          <span class="readout__v" id="rRate">—</span>
+          <span class="readout__u">m² / day</span>
+        </div>
+        <div class="readout">
+          <span class="readout__k">Required rate</span>
+          <span class="readout__v" id="rReq">—</span>
+          <span class="readout__u">m² / day to hold deadline</span>
+        </div>
+        <div class="readout">
+          <span class="readout__k">Complete</span>
+          <span class="readout__v" id="rPct">—</span>
+          <span class="readout__u">of scope installed</span>
+        </div>
+        <div class="readout readout--accent">
+          <span class="readout__k">Forecast completion</span>
+          <span class="readout__v" id="rEta">—</span>
+          <span class="readout__u" id="rEtaSub">no projection yet</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

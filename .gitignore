@@ -1,0 +1,6 @@
+# Private / proprietary — never publish
+*.ifc
+task.md
+
+# Local tooling
+.claude/
