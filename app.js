@@ -5,7 +5,7 @@
  */
 "use strict";
 
-const STORE_KEY = "steelcast.v3";
+const STORE_KEY = "steelcast.v4";
 const DAY = 86400000;
 
 /* ───────────────────────── state ───────────────────────── */
@@ -375,7 +375,7 @@ function loadSample() {
   // Fridays are short days (~a quarter). Journal runs 04 May → 06 Jun 2026.
   const start = new Date(2026, 4, 4);    // Mon 04 May 2026
   const end = new Date(2026, 5, 6);      // Sat 06 Jun 2026 (inclusive bound)
-  state.name = "Yuka Emek Sara";
+  state.name = "Logistic Center Houston - Roofing";
   state.area = 5800;
   state.start = toISO(start);
   state.deadline = toISO(new Date(2026, 6, 1)); // 01 Jul 2026
