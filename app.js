@@ -370,9 +370,9 @@ document.getElementById("loadSample").addEventListener("click", () => {
 
 /* ───────────────────────── sample project ───────────────────────── */
 function loadSample() {
-  // Yuka Emek Sara — 2,400 m² steel package.
-  // Crew works Sun–Fri: Sun–Thu are full days (~50 m², peaking at 60),
-  // Fridays are short days (~a quarter). Journal runs 04 May → 06 Jun 2026.
+  // Logistic Center Houston — 5,800 m² roofing package.
+  // Crew works Sun–Fri: Sun–Thu are full days (~100 m²), Fridays are short
+  // days (~30 m²). Journal runs 04 May → 06 Jun 2026.
   const start = new Date(2026, 4, 4);    // Mon 04 May 2026
   const end = new Date(2026, 5, 6);      // Sat 06 Jun 2026 (inclusive bound)
   state.name = "Logistic Center Houston - Roofing";
