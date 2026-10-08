@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<!-- Review.html – סרגל צד לסיווג ידני של עסקאות לא-ברורות, קבוצה אחת בכל פעם. -->
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --g:#34a853; --y:#f9ab00; --r:#ea4335; --n:#9aa0a6; --ink:#202124; --mut:#5f6368; --line:#dadce0; --blue:#1a73e8; }
+  * { box-sizing: border-box; }
+  body { font-family: Rubik, Arial, sans-serif; margin: 0; padding: 12px; color: var(--ink); font-size: 13px; background: #fff; }
+  .counter { font-size: 12px; color: var(--mut); margin-bottom: 6px; }
+  .progress { height: 6px; background: #f1f3f4; border-radius: 3px; overflow: hidden; margin-bottom: 12px; }
+  .progress div { height: 100%; background: var(--blue); width: 0; transition: width .3s; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .merchant { font-size: 17px; font-weight: 700; word-break: break-word; }
+  .sub { color: var(--mut); font-size: 12px; margin-top: 2px; }
+  .total { font-size: 20px; font-weight: 700; margin-top: 8px; }
+  .total.neg { color: #137333; }
+  .tag { display: inline-block; background: #fef7e0; color: #b06000; border-radius: 10px; padding: 1px 8px; font-size: 11px; margin-top: 6px; }
+  .items { margin-top: 8px; font-size: 12px; max-height: 150px; overflow: auto; }
+  .items div { display: flex; justify-content: space-between; gap: 6px; padding: 3px 0; border-top: 1px dashed #eee; }
+  .items .d { color: var(--mut); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .suggest { margin-top: 8px; }
+  .suggest button { background: #e8f0fe; color: var(--blue); border: 1px solid var(--blue); }
+  .scope { margin: 6px 0 10px; font-size: 12px; }
+  .scope label { display: block; margin: 3px 0; cursor: pointer; }
+  .cats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 10px 6px; cursor: pointer; font-weight: 500; }
+  .cat { color: #fff; min-height: 42px; }
+  .cat.ירוק { background: var(--g); } .cat.צהוב { background: var(--y); color: #202124; } .cat.אדום { background: var(--r); } .cat.n { background: var(--n); }
+  .row { display: flex; gap: 6px; margin-top: 8px; }
+  .row button { flex: 1; background: #f1f3f4; color: var(--ink); }
+  .done { text-align: center; padding: 24px 6px; font-size: 15px; }
+  .primary { background: var(--blue); color: #fff; padding: 10px 18px; }
+  .err { color: #c5221f; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div id="app">טוען…</div>
+<script>
+var S = { groups: [], cats: [], i: 0, totalTx: 0, doneTx: 0 };
+var $ = function (id) { return document.getElementById(id); };
+
+function load() {
+  google.script.run.withSuccessHandler(function (d) {
+    S.groups = d.groups; S.cats = d.categories; S.i = 0; S.totalTx = d.txCount; S.doneTx = 0;
+    render();
+  }).withFailureHandler(err).getReviewGroups();
+}
+
+function render() {
+  var app = $('app');
+  var remaining = S.totalTx - S.doneTx;
+  if (S.i >= S.groups.length) {
+    app.innerHTML = '<div class="done">' + (remaining > 0
+      ? 'סיימת לעבור על הכל.<br><span class="sub">' + remaining + ' עסקאות שדילגת עליהן נשארו לבירור.</span>'
+      : '🎉 הכל מסווג!') +
+      '<br><br>לעדכן את הדשבורד?<br><br><button class="primary" id="upd">עדכן דשבורד</button></div>';
+    $('upd').onclick = updateDashboard;
+    return;
+  }
+  var g = S.groups[S.i];
+  var h = '<div class="counter">נשארו ' + remaining + ' מתוך ' + S.totalTx + ' עסקאות · קבוצה ' + (S.i + 1) + ' מתוך ' + S.groups.length + '</div>';
+  h += '<div class="progress"><div style="width:' + (S.totalTx ? Math.round(100 * S.doneTx / S.totalTx) : 0) + '%"></div></div>';
+  h += '<div class="card"><div class="merchant">' + esc(g.isTransfer ? (g.recipient || g.merchant) : g.merchant) + '</div>';
+  h += '<div class="sub">' + (g.isTransfer ? 'העברה ב-' + esc(g.merchant) + ' · ' : '') + (g.branch ? 'ענף: ' + esc(g.branch) : 'ללא ענף') + '</div>';
+  h += '<div class="total' + (g.total < 0 ? ' neg' : '') + '">' + money(g.total) + (g.count > 1 ? ' <span class="sub">(' + g.count + ' עסקאות)</span>' : '') + '</div>';
+  if (g.outlier) h += '<div class="tag">עסקה חריגה בגודלה – לאישור</div>';
+  h += '<div class="items">' + g.items.map(function (it) {
+    var fx = it.cur && it.cur !== 'ILS' ? ' (' + it.orig + ' ' + it.cur + ')' : '';
+    return '<div><span>' + it.date + '</span><span class="d" title="' + esc(it.detail) + '">' + esc(it.detail) + '</span><span>' + money(it.amount) + fx + '</span></div>';
+  }).join('') + '</div>';
+  if (g.suggest) h += '<div class="suggest">הצעה: <button id="sug">' + esc(g.suggest) + ' ✓</button></div>';
+  h += '</div>';
+  var alwaysLabel = g.isTransfer ? 'תמיד לנמען הזה' : 'תמיד לבית העסק הזה';
+  var defAlways = !g.outlier && (!g.isTransfer || !!g.recipient);
+  h += '<div class="scope">';
+  if (!g.isTransfer || g.recipient) h += '<label><input type="radio" name="sc" value="always"' + (defAlways ? ' checked' : '') + '> ' + alwaysLabel + '</label>';
+  h += '<label><input type="radio" name="sc" value="once"' + (defAlways ? '' : ' checked') + '> ' + (g.count > 1 ? 'רק לעסקאות האלה' : 'רק לעסקה הזו') + '</label></div>';
+  h += '<div class="cats">' + S.cats.map(function (c, k) {
+    var cls = /ירוק|צהוב|אדום/.test(c.color) ? c.color : 'n';
+    return '<button class="cat ' + cls + '" data-k="' + k + '">' + esc(c.name) + '</button>';
+  }).join('') + '</div>';
+  h += '<div class="row"><button id="unk">לא יודע</button><button id="skip">דלג</button></div><div id="e" class="err"></div>';
+  app.innerHTML = h;
+
+  Array.prototype.forEach.call(document.querySelectorAll('.cat'), function (b) {
+    b.onclick = function () { decide(S.cats[Number(b.dataset.k)].name); };
+  });
+  if ($('sug')) $('sug').onclick = function () { decide(g.suggest); };
+  $('unk').onclick = function () { decide('אחר', 'once'); };
+  $('skip').onclick = function () { S.i++; render(); };
+}
+
+function decide(category, forceScope) {
+  var g = S.groups[S.i];
+  var sc = document.querySelector('input[name=sc]:checked');
+  var scope = forceScope || (sc ? sc.value : 'once');
+  var payload = { ids: g.items.map(function (x) { return x.id; }), category: category, scope: scope,
+    merchant: g.merchant, recipient: g.recipient, isTransfer: g.isTransfer };
+  S.doneTx += g.count; S.i++;
+  render();
+  google.script.run.withFailureHandler(err).applyReviewDecision(payload);
+}
+
+function updateDashboard() {
+  $('app').innerHTML = '<div class="done">מעדכן את הדשבורד…</div>';
+  google.script.run.withSuccessHandler(function (r) {
+    $('app').innerHTML = '<div class="done">✓ הדשבורד עודכן.' + (r.pending ? '<br><span class="sub">' + r.pending + ' עדיין לבירור.</span><br><br><button class="primary" id="again">להמשיך לסווג</button>' : '') + '</div>';
+    if ($('again')) $('again').onclick = load;
+  }).withFailureHandler(err).refreshFromSidebar();
+}
+
+function money(n) { return '₪' + Number(n).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function err(e) { var el = $('e') || $('app'); el.innerHTML += '<div class="err">שגיאה: ' + esc(e && e.message || e) + '</div>'; }
+load();
+</script>
+</body>
+</html>
