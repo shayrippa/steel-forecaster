@@ -138,7 +138,7 @@ function importRecords_(records, sourceName) {
       var card = String(rec['כרטיס'] || '').replace(/\D/g, '').slice(-4);
       var merchant = String(rec['בית עסק'] || '').trim();
       var bill = parseDate_(rec['תאריך חיוב']) || parseDate_(rec['מועד חיוב דף']);
-      var base = [card, ymd_(date), norm_(merchant), ils.toFixed(2), type, ymd_(parseDate_(rec['מועד חיוב דף']))].join('|');
+      var base = [card, ymd_(date), merchantSig_(merchant), ils.toFixed(2), type, ymd_(parseDate_(rec['מועד חיוב דף']))].join('|');
       occ[base] = (occ[base] || 0) + 1;
       var key = base + '|' + occ[base];
       var id = String(rec['מזהה'] || '').trim() || md5_(key);
@@ -188,6 +188,12 @@ function importRecords_(records, sourceName) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** חתימה של שם בית עסק למפתח הכפילויות – רק אותיות וספרות, 8 תווים ראשונים,
+ *  כדי שהבדלים קטנים בפענוח (רווחים, גרשיים, סוגריים) בין CSV ל-PDF לא ייצרו כפילות */
+function merchantSig_(m) {
+  return String(m || '').toLowerCase().replace(/[^a-z0-9\u05d0-\u05ea]/g, '').slice(0, 8);
 }
 
 function md5_(s) {

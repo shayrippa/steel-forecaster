@@ -169,6 +169,7 @@ async function importPdf(item) {
   const records = item.parsed.records.map(function (r) {
     return Object.assign({}, r, { 'כרטיס': card, 'מועד חיוב דף': bill });
   });
+  if (!records.length) { setCell(item.tr, 5, '<span class="bad">לא נמצאו עסקאות – הקובץ לא יובא</span>'); return; }
   setCell(item.tr, 5, '<span class="wait">מייבא…</span>');
   const res = await run('importParsedPdf', { fileName: item.name, fileId: item.src.fileId || null, base64: item.src.base64 || null, records: records });
   if (!res.ok) { setCell(item.tr, 5, '<span class="bad">' + esc(res.error) + '</span>'); return; }

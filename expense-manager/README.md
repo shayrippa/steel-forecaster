@@ -59,5 +59,5 @@
 ## למפתחים
 
 - הקוד המקורי ב-`src/`. אחרי שינוי מריצים `./build.sh`, והוא בונה את שלושת הקבצים שב-`dist/`.
-- בדיקות: `node test/parser.test.js` (פענוח), `node test/e2e.test.js` (ייבוא, סיווג, ניתוח ודשבורד על סביבת דמה של Apps Script), `node test/pdf.test.js` (PDF אמיתי דרך pdf.js – דורש playwright ו-pdfjs-dist@3.11.174).
+- בדיקות: `node test/parser.test.js` ו-`node test/cal-glyph.test.js` (פענוח; השני מחקה את מבנה דף כאל האמיתי – תו לכל פריט), `node test/e2e.test.js` (ייבוא, סיווג, ניתוח ודשבורד על סביבת דמה של Apps Script), `node test/pdf.test.js` (PDF אמיתי דרך pdf.js – דורש playwright ו-pdfjs-dist@3.11.174).
 - **אסור להכניס לגיט קבצי פירוט אשראי (pdf/csv)** – ראו `.gitignore`.

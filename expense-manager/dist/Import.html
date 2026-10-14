@@ -65,7 +65,9 @@
 /**
  * calParser.js – פענוח דף פירוט PDF של כאל בדפדפן (גרסת JavaScript של cal_pdf_to_csv.py).
  * מקבל מילים עם מיקום (מ-pdf.js) ומחזיר עסקאות בפורמט ה-CSV של הממיר + דוח בדיקת סכומים.
- * עברית ב-PDF שמורה לפעמים בסדר ויזואלי הפוך – מזוהה אוטומטית לפי אותיות סופיות (ך ם ן ף ץ).
+ * כאל שומרת כל אות כפריט נפרד, ולכן הטקסט נבנה לפי מיקום: האותיות מסודרות משמאל לימין (סדר ויזואלי),
+ * ואז הופכים לסדר לוגי (עברית מימין לשמאל, מספרים ואנגלית משמאל לימין).
+ * פריטים של כמה תווים שמורים בסדר לוגי, או – אם זוהה כך לפי אותיות סופיות (ך ם ן ף ץ) – בסדר ויזואלי.
  * העמודות מזוהות לפי מיקום מילות הכותרת. שורה שמתחילה בתאריך = עסקה חדשה;
  * שורה בלי תאריך עד 12 נקודות מתחתיה = המשך שלה. עמודת הפרסומות משמאל והכותרת התחתונה מסוננות.
  *
@@ -123,12 +125,26 @@ var CalParser = (function () {
     return lines;
   }
 
-  /** חיבור פריטים לטקסט: עברית – מימין לשמאל; בלי עברית – משמאל לימין */
+  /**
+   * חיבור פריטים לטקסט לפי מיקום: בונים מחרוזת ויזואלית משמאל לימין (רווח כשיש פער בין פריטים),
+   * ואז הופכים לסדר לוגי. פריט עברי של כמה תווים (שמור בסדר לוגי) מומר קודם לסדר ויזואלי.
+   */
   function joinCell(items) {
     if (!items.length) return '';
-    var heb = items.some(function (i) { return HEB.test(i.str); });
-    var s = items.slice().sort(function (a, b) { return heb ? b.x - a.x : a.x - b.x; });
-    return s.map(function (i) { return String(i.str).trim(); }).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    var s = items.slice().sort(function (a, b) { return a.x - b.x; });
+    var vis = '', prev = null;
+    s.forEach(function (it) {
+      var str = String(it.str);
+      if (str.length > 1 && HEB.test(str)) str = flip(str);
+      if (prev) {
+        var gap = it.x - (prev.x + prev.w);
+        if (gap > Math.max(0.6, 0.15 * (it.h || prev.h || 8))) vis += ' ';
+      }
+      vis += str;
+      prev = it;
+    });
+    var out = HEB.test(vis) ? flip(vis) : vis;
+    return out.replace(/\s+/g, ' ').trim();
   }
 
   function isHeaderLine(text) {
@@ -153,7 +169,8 @@ var CalParser = (function () {
   /** בניית עמודות מאזור הכותרת */
   function buildColumns(lines, hi, hEnd, pageWidth) {
     var region = [];
-    for (var li = hi; li <= hEnd; li++) region = region.concat(lines[li].items);
+    // רק תווים עבריים – פרסומות באנגלית ("FLY CARD") ליד הכותרת לא שייכות לה
+    for (var li = hi; li <= hEnd; li++) region = region.concat(lines[li].items.filter(function (it) { return HEB.test(it.str); }));
     // אשכולות לפי חפיפה אופקית
     region.sort(function (a, b) { return a.x - b.x; });
     var clusters = [];
@@ -161,7 +178,7 @@ var CalParser = (function () {
       var x0 = it.x, x1 = it.x + it.w;
       var c = null;
       for (var i = 0; i < clusters.length; i++) {
-        if (x0 <= clusters[i].x1 + 3 && x1 >= clusters[i].x0 - 3) { c = clusters[i]; break; }
+        if (x0 <= clusters[i].x1 + 4 && x1 >= clusters[i].x0 - 4) { c = clusters[i]; break; }
       }
       if (!c) { c = { x0: x0, x1: x1, items: [] }; clusters.push(c); }
       c.items.push(it); c.x0 = Math.min(c.x0, x0); c.x1 = Math.max(c.x1, x1);
@@ -172,7 +189,7 @@ var CalParser = (function () {
       merged = false;
       for (var a = 0; a < clusters.length && !merged; a++) {
         for (var b = a + 1; b < clusters.length && !merged; b++) {
-          if (clusters[a].x0 <= clusters[b].x1 + 3 && clusters[a].x1 >= clusters[b].x0 - 3) {
+          if (clusters[a].x0 <= clusters[b].x1 + 4 && clusters[a].x1 >= clusters[b].x0 - 4) {
             clusters[a].items = clusters[a].items.concat(clusters[b].items);
             clusters[a].x0 = Math.min(clusters[a].x0, clusters[b].x0);
             clusters[a].x1 = Math.max(clusters[a].x1, clusters[b].x1);
@@ -192,7 +209,21 @@ var CalParser = (function () {
       else if (t.indexOf('ענף') >= 0) key = 'branch';
       else if (t.indexOf('פירוט') >= 0 || t.indexOf('הערות') >= 0) key = 'detail';
       else if (t.indexOf('כרטיס') >= 0) key = 'shown';
-      if (key) cols.push({ key: key, x0: c.x0, x1: c.x1, cx: (c.x0 + c.x1) / 2, title: t });
+      c.key = key; c.title = t;
+    });
+    // מילים בלי מפתח ("בית", "העסק") מצטרפות לעמודה הסמוכה
+    clusters.forEach(function (c) {
+      if (c.key || !HEB.test(c.title)) return; // "FLY CARD" וכדומה – פרסומת, לא חלק מהכותרת
+      var best = null, bestGap = 12;
+      clusters.forEach(function (k) {
+        if (!k.key) return;
+        var gap = Math.max(k.x0 - c.x1, c.x0 - k.x1);
+        if (gap < bestGap) { bestGap = gap; best = k; }
+      });
+      if (best) { best.x0 = Math.min(best.x0, c.x0); best.x1 = Math.max(best.x1, c.x1); }
+    });
+    clusters.forEach(function (c) {
+      if (c.key) cols.push({ key: c.key, x0: c.x0, x1: c.x1, cx: (c.x0 + c.x1) / 2, title: c.title });
     });
     // שתי עמודות "סכום" בלי המילה "חיוב": השמאלית היא סכום החיוב
     var amounts = cols.filter(function (c) { return c.key === 'amount'; });
@@ -204,24 +235,42 @@ var CalParser = (function () {
       if (am.length === 1) am[0].key = 'charge';
     }
     cols.sort(function (a, b) { return a.cx - b.cx; });
+    // שני תחומים לכל עמודה, והמילה משויכת לפי סכום החפיפה בשניהם:
+    //  (א) לפי מרכזי הכותרות – מתאים לטקסט ממורכז;
+    //  (ב) מהקצה הימני של הכותרת ועד הקצה הימני של העמודה שמשמאלה – מתאים לטקסט עברי מיושר לימין.
     for (var i = 0; i < cols.length; i++) {
+      var last = i === cols.length - 1;
       cols[i].b0 = i === 0 ? cols[i].x0 - 40 : (cols[i - 1].cx + cols[i].cx) / 2;
-      cols[i].b1 = i === cols.length - 1 ? Math.max(cols[i].x1 + 40, pageWidth || 0) : (cols[i].cx + cols[i + 1].cx) / 2;
-      // עמודות מספרים צרות: גבול לפי הכותרת עצמה + מרווח
+      cols[i].b1 = last ? Math.max(cols[i].x1 + 40, pageWidth || 0) : (cols[i].cx + cols[i + 1].cx) / 2;
+      cols[i].r0 = i === 0 ? cols[i].x0 - 40 : cols[i - 1].x1 + 2;
+      cols[i].r1 = last ? Math.max(cols[i].x1 + 40, pageWidth || 0) : cols[i].x1 + 2;
     }
     return cols;
+  }
+
+  /** קיבוץ תווים צמודים למילים, כדי שמילה (למשל תאריך) תשויך לעמודה אחת בשלמותה */
+  function toWords(items) {
+    var s = items.slice().sort(function (a, b) { return a.x - b.x; });
+    var words = [], cur = null;
+    s.forEach(function (it) {
+      var gap = cur ? it.x - cur.x1 : Infinity;
+      if (cur && gap <= Math.max(0.6, 0.15 * (it.h || 8))) { cur.items.push(it); cur.x1 = Math.max(cur.x1, it.x + it.w); }
+      else { cur = { items: [it], x0: it.x, x1: it.x + it.w }; words.push(cur); }
+    });
+    return words;
   }
 
   function assign(items, cols) {
     var cells = {};
     cols.forEach(function (c) { cells[c.key] = []; });
-    items.forEach(function (it) {
-      var x0 = it.x, x1 = it.x + it.w, best = null, bestOv = 0;
+    toWords(items).forEach(function (wd) {
+      var best = null, bestOv = 0;
       cols.forEach(function (c) {
-        var ov = Math.min(x1, c.b1) - Math.max(x0, c.b0);
+        var ov = Math.max(0, Math.min(wd.x1, c.b1) - Math.max(wd.x0, c.b0)) +
+          1.1 * Math.max(0, Math.min(wd.x1, c.r1) - Math.max(wd.x0, c.r0));
         if (ov > bestOv) { bestOv = ov; best = c; }
       });
-      if (best) cells[best.key].push(it);
+      if (best) cells[best.key] = cells[best.key].concat(wd.items);
     });
     var out = {};
     Object.keys(cells).forEach(function (k) { out[k] = cleanQuotes(joinCell(cells[k])); });
@@ -272,24 +321,30 @@ var CalParser = (function () {
   }
 
   function findCard(text) {
-    var cands = {};
-    var res = [
-      /(?:המסתיים|מסתיים|בספרות|שמספרו|לכרטיס|כרטיס)[^\d\n]{0,30}(\d{4})(?!\d)/g,
-      /[*xX•·]{2,}[\s\-]*(\d{4})(?!\d)/g,
-      /(?<!\d)(\d{4})[\s\-]*[*xX•·]{2,}/g
+    // קודם "המסתיים ב-1875" (הכי אמין); "מזהה כרטיס Google Pay 4130" הוא מזהה ארנק ולא מספר הכרטיס
+    var groups = [
+      [/(?:המסתיים|מסתיים|בספרות)[^\d\n]{0,15}(\d{4})(?!\d)/g],
+      [/[*xX•·]{2,}[\s\-]*(\d{4})(?!\d)/g, /(?<!\d)(\d{4})[\s\-]*[*xX•·]{2,}/g],
+      [/(?:שמספרו|לכרטיס)[^\d\n]{0,30}(\d{4})(?!\d)/g]
     ];
-    res.forEach(function (re) {
-      var m;
-      while ((m = re.exec(text))) { cands[m[1]] = (cands[m[1]] || 0) + 1; }
-    });
-    var best = Object.keys(cands).filter(function (k) { return !/^(19|20)\d\d$/.test(k) || cands[k] > 1; })
-      .sort(function (a, b) { return cands[b] - cands[a]; })[0];
-    return best || '';
+    for (var g = 0; g < groups.length; g++) {
+      var cands = {};
+      groups[g].forEach(function (re) {
+        var m;
+        while ((m = re.exec(text))) { cands[m[1]] = (cands[m[1]] || 0) + 1; }
+      });
+      var best = Object.keys(cands).sort(function (a, b) { return cands[b] - cands[a]; })[0];
+      if (best) return best;
+    }
+    return '';
   }
 
   function findBillDate(text) {
+    var D = '(\\d{1,2}[\\/.]\\d{1,2}[\\/.]\\d{2,4})';
     var res = [
-      /(?:מועד|תאריך)\s*(?:ה)?חיוב[^\d\n]{0,25}(\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4})/,
+      new RegExp('חיוב חודשי\\s*ל-?\\s*' + D),
+      new RegExp('סה"כ לתאריך\\s*' + D),
+      /(?:מועד|תאריך)\s*(?:ה)?חיוב(?!\s*הבא)[^\d\n]{0,25}(\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4})/,
       /לחיוב\s*(?:ב|ביום|בתאריך)?[^\d\n]{0,15}(\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4})/,
       /(\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4})[^\d\n]{0,15}(?:מועד|תאריך)\s*(?:ה)?חיוב/
     ];
@@ -320,15 +375,20 @@ var CalParser = (function () {
         if (li <= skipTo) return;
         var t = l.text;
         var he = headerEnd(lines, li);
-        if (he >= 0) { cols = buildColumns(lines, li, he, page.width); headers++; skipTo = he; last = null; return; }
-        if (/עתידי/.test(t) && !/^\d/.test(t)) { mode = 'עתידי'; last = null; }
-        else if (/מיידי|חויבו מיד/.test(t) && !DATE_RE.test(t.split(' ')[0])) { mode = 'מיידי'; last = null; }
-        if (/סה"כ|סך הכל|סך הכול/.test(t)) {
+        if (he >= 0) { cols = buildColumns(lines, li, he, page.width); if (opts.debugCols) debug.push('COLS ' + JSON.stringify(cols.map(function (c) { return [c.key, Math.round(c.b0), Math.round(c.b1), c.title]; }))); headers++; skipTo = he; last = null; return; }
+        var startsWithDate = !!normDate(t.split(' ')[0]);
+        if (!startsWithDate) {
+          if (/פירוט עסק[א]?ות שנצברו/.test(t)) { mode = 'רגיל'; last = null; }
+          else if (/עתידי/.test(t)) { mode = 'עתידי'; last = null; }
+          else if (/מיידי|חויבו מיד/.test(t)) { mode = 'מיידי'; last = null; }
+        }
+        if (/סה"כ|סך הכל|סך הכול|סך ה/.test(t)) {
           totals.push({ text: t, amounts: amountsIn(t), mode: mode, page: pi + 1 });
           last = null; return;
         }
         if (!cols || l.y > footerY) return;
-        var minX = Math.min.apply(null, cols.map(function (c) { return c.x0; })) - 40;
+        // עמודת הפרסומות משמאל: כל מה שנגמר לפני תחילת העמודה השמאלית ביותר
+        var minX = Math.min.apply(null, cols.map(function (c) { return c.x0; })) - 3;
         var its = l.items.filter(function (it) { return it.x + it.w >= minX; });
         if (!its.length) return;
         var cells = assign(its, cols);
@@ -345,6 +405,8 @@ var CalParser = (function () {
           };
           if (last.currency !== 'ILS' && currencyOf(amtCell) === 'ILS') last.currency = 'ILS';
           txs.push(last);
+        } else if (/^\d{0,2}$/.test(joinCell(its))) {
+          return; // מספר עמוד / שארית – לא המשך של עסקה
         } else if (last && last.page === pi && l.y - last.y <= Math.max(CONT_GAP, 1.6 * lineHeight(its))) {
           if (cells.merchant) last.merchant = (last.merchant + ' ' + cells.merchant).trim();
           if (cells.detail) last.detail = (last.detail + ' ' + cells.detail).trim();
@@ -373,7 +435,8 @@ var CalParser = (function () {
       var match = allAmounts.some(function (a) { return Math.abs(Math.abs(a) - Math.abs(s)) < 0.015; });
       return { mode: m, sum: s, ok: match };
     });
-    var ok = good.length > 0 && bad === 0 && checks.every(function (c) { return c.ok; });
+    // עסקאות עתידיות לא מיובאות, ולכן הבדיקה שלהן לא חוסמת
+    var ok = good.length > 0 && bad === 0 && checks.every(function (c) { return c.ok || c.mode === 'עתידי'; });
 
     var records = good.map(function (t) {
       return {
@@ -505,6 +568,7 @@ async function importPdf(item) {
   const records = item.parsed.records.map(function (r) {
     return Object.assign({}, r, { 'כרטיס': card, 'מועד חיוב דף': bill });
   });
+  if (!records.length) { setCell(item.tr, 5, '<span class="bad">לא נמצאו עסקאות – הקובץ לא יובא</span>'); return; }
   setCell(item.tr, 5, '<span class="wait">מייבא…</span>');
   const res = await run('importParsedPdf', { fileName: item.name, fileId: item.src.fileId || null, base64: item.src.base64 || null, records: records });
   if (!res.ok) { setCell(item.tr, 5, '<span class="bad">' + esc(res.error) + '</span>'); return; }
