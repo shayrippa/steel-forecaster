@@ -135,3 +135,17 @@ assert.strictEqual(dash.charts.length, 3, 'charts not duplicated');
 console.log('✓ ניתוח ודשבורד נבנו, 3 גרפים, בלי כפילויות');
 console.log('נוסחת סה"כ:', dash.formulas['6,1']);
 console.log('ALL TESTS PASSED');
+
+// הוצאות קבועות: שכירות מחודש 2026-01, ב-1 לחודש
+run('setupFixedSheet_()');
+const fx = env.__ss.getSheetByName('הוצאות קבועות');
+fx.getRange(2, 1, 1, 6).setValues([['שכירות', 'דיור', 5000, 1, '2026-01', '2026-06']]);
+run('buildAnalysisAndDashboard_()');
+let rent = tx().filter(r => r[6] === 'שכירות');
+assert.strictEqual(rent.length, 6, 'rent months');
+assert.ok(rent.every(r => r[15] === 'דיור' && r[17] === 'ידני' && r[11] === 5000));
+run('buildAnalysisAndDashboard_()');
+assert.strictEqual(tx().filter(r => r[6] === 'שכירות').length, 6, 'no duplicates on rerun');
+const ms2 = env.__ss.getSheetByName('סיכום חודשי').data;
+assert.ok(ms2.find(r => r[0] === 'דיור')[ms2[0].indexOf('2026-03')] === 5000, 'rent in monthly summary');
+console.log('✓ הוצאות קבועות: 6 חודשי שכירות, בלי כפילויות, בסיכום החודשי');

@@ -12,6 +12,8 @@ function onOpen() {
     .addItem('2ב. החל סיווגים מגיליון לבירור', 'menuApplyFromReviewSheet')
     .addItem('3. עדכון ניתוח ודשבורד', 'menuAnalysis')
     .addSeparator()
+    .addItem('הוצאות קבועות (שכירות וכו\')', 'menuFixed')
+    .addSeparator()
     .addItem('הגדרה ראשונית', 'runSetup')
     .addToUi();
 }

@@ -12,6 +12,7 @@ function runSetup() {
   setupDictionary_();
   setupTransactions_();
   setupReviewSheet_();
+  setupFixedSheet_();
   [SHEETS.MONTHLY, SHEETS.WEEKLY, SHEETS.PATTERNS, SHEETS.DASH].forEach(function (n) { getOrCreate_(n); });
   var folders = ensureFolders_();
 
@@ -40,7 +41,7 @@ function getOrCreate_(name) {
 function orderSheets_() {
   var ss = ss_();
   var order = [SHEETS.DASH, SHEETS.TX, SHEETS.REVIEW, SHEETS.MONTHLY, SHEETS.WEEKLY, SHEETS.PATTERNS,
-    SHEETS.SETTINGS, SHEETS.DICT];
+    SHEETS.FIXED, SHEETS.SETTINGS, SHEETS.DICT];
   order.forEach(function (n, i) {
     var sh = ss.getSheetByName(n);
     if (sh) { ss.setActiveSheet(sh); ss.moveActiveSheet(i + 1); }

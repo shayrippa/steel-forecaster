@@ -11,6 +11,7 @@ function menuAnalysis() {
 }
 
 function buildAnalysisAndDashboard_() {
+  syncFixedExpenses_();
   var data = readTx_().filter(function (r) { return r[C.DATE] instanceof Date; });
   var cats = getCategories_();
   var months = uniqueSorted_(data.map(function (r) { return String(r[C.MONTH]); }));

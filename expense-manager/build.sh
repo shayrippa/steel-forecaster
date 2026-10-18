@@ -3,7 +3,7 @@
 cd "$(dirname "$0")"
 {
   echo "/** ניהול הוצאות – קובץ מאוחד (נבנה אוטומטית מתיקיית src באמצעות build.sh). לא לערוך כאן. */"
-  for f in Config Util Setup Import Classify Analysis Dashboard Menu; do
+  for f in Config Util Setup Import Classify Fixed Analysis Dashboard Menu; do
     echo ""; echo "/* ===================== $f.gs ===================== */"; cat "src/$f.gs"
   done
 } > dist/Code.gs

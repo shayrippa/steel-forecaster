@@ -11,7 +11,8 @@ var SHEETS = {
   MONTHLY: 'סיכום חודשי',
   WEEKLY: 'סיכום שבועי',
   PATTERNS: 'דפוסים',
-  DASH: 'דשבורד'
+  DASH: 'דשבורד',
+  FIXED: 'הוצאות קבועות'
 };
 
 var FOLDERS = {
