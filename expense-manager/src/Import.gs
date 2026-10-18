@@ -125,8 +125,9 @@ function importRecords_(records, sourceName) {
     var sh = sheet_(SHEETS.TX);
     var existing = readTx_();
     var ids = {}, keys = {};
-    // מפתח "רופף": כרטיס + תאריך + בית עסק + סכום + חודש החיוב (לא היום – באקסל של כאל מועד החיוב
-    // יכול להיות 10/01 ובדף ה-PDF 11/01). סופרים כמה כבר קיימות, כדי ששתי עסקאות זהות לגיטימיות יישמרו.
+    // מפתח "רופף": כרטיס + תאריך + סכום + חודש החיוב. בלי שם בית העסק – הוא נכתב אחרת ב-PDF ובאקסל
+    // (קיצור, סדר מילים), ובלי היום של מועד החיוב (באקסל 10/01, ב-PDF 11/01). סופרים כמה כבר קיימות,
+    // כדי ששתי עסקאות זהות לגיטימיות יישמרו.
     var looseHave = {};
     existing.forEach(function (r) {
       if (r[C.ID]) ids[String(r[C.ID])] = 1;
@@ -210,8 +211,9 @@ function merchantSig_(m) {
 
 function looseKey_(card, date, merchant, ils, bill) {
   var d = date instanceof Date ? date : parseDate_(date), b = bill instanceof Date ? bill : parseDate_(bill);
-  return [String(card || '').replace(/\D/g, '').slice(-4), d ? ymd_(d) : '', merchantSig_(merchant),
-    (Number(ils) || 0).toFixed(2), b ? monthKey_(b) : ''].join('|');
+  var c = String(card || '').replace(/\D/g, '').slice(-4);
+  // בלי כרטיס (הוצאות קבועות) – השם הוא מה שמבדיל בין הוצאות
+  return [c, d ? ymd_(d) : '', c ? '' : merchantSig_(merchant), (Number(ils) || 0).toFixed(2), b ? monthKey_(b) : ''].join('|');
 }
 
 function md5_(s) {

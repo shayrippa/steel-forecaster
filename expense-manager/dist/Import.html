@@ -608,15 +608,19 @@ var IsracardParser = (function () {
 
 /**
  * calExcelParser.js – קריאת קובץ אקסל של כאל ("פירוט עסקאות וזיכויים", ייצוא מהאתר/אפליקציה).
- * כותרת: "פירוט עסקאות ל... לכרטיס ויזה 9173", ואחריה טבלה אחת שיכולה לכסות כמה חודשים:
- * תאריך עסקה | שם בית עסק | סכום בש"ח | מועד חיוב | סוג עסקה | מזהה כרטיס בארנק | הנחה | הערות.
- * לכל שורה מועד חיוב משלה. עסקאות במט"ח: הסכום המקורי והמטבע מופיעים בהערות ("סכום העסקה הוא 15.99 €").
- * בדיקת תקינות: סכום כל השורות מול "סה"כ עסקאות בגיליון זה".
+ * שתי גרסאות:
+ *  (א) כמה חודשים: "פירוט עסקאות ל... לכרטיס ויזה 9173" ←
+ *      תאריך עסקה | שם בית עסק | סכום בש"ח | מועד חיוב | סוג עסקה | מזהה כרטיס בארנק | הנחה | הערות;
+ *      לכל שורה מועד חיוב משלה, ובסוף "סה"כ עסקאות בגיליון זה".
+ *  (ב) דף חיוב אחד: "...המסתיים ב-1875" + "עסקאות לחיוב ב-10/07/2026: 8,695.88 ₪" ←
+ *      תאריך עסקה | שם בית עסק | סכום עסקה | סכום חיוב | סוג עסקה | ענף | הערות.
+ * מט"ח: המטבע מההערות ("סכום העסקה הוא 15.99 €"); אם אין – סכום עסקה שונה מסכום החיוב = מט"ח.
+ * בדיקת תקינות: סכום השורות מול הסה"כ שבקובץ.
  */
 var CalExcelParser = (function () {
   var COLS = [
-    ['date', /^תאריך עסקה/], ['merchant', /שם בית (ה)?עסק/], ['amount', /^סכום/], ['bill', /^מועד חיוב/],
-    ['type', /^סוג עסקה/], ['wallet', /ארנק/], ['discount', /^הנחה/], ['notes', /^הערות/]
+    ['date', /^תאריך עסקה/], ['merchant', /שם בית (ה)?עסק/], ['amount', /^סכום (חיוב|בש"ח)/], ['orig', /^סכום עסקה/],
+    ['bill', /^מועד חיוב/], ['type', /^סוג עסקה/], ['branch', /^ענף/], ['wallet', /ארנק/], ['discount', /^הנחה/], ['notes', /^הערות/]
   ];
   var CUR = { '€': 'EUR', '$': 'USD', '£': 'GBP', '₪': 'ILS' };
 
@@ -646,7 +650,7 @@ var CalExcelParser = (function () {
     for (var i = 0; i < Math.min(rows.length, 15); i++) {
       var c = (rows[i] || []).map(clean);
       if (c.some(function (x) { return /^תאריך עסקה/.test(x); }) && c.some(function (x) { return /שם בית/.test(x); }) &&
-        c.some(function (x) { return /^מועד חיוב/.test(x); })) return i;
+        c.some(function (x) { return /^סכום (חיוב|בש"ח)/.test(x); })) return i;
     }
     return -1;
   }
@@ -661,12 +665,22 @@ var CalExcelParser = (function () {
     for (var i = 0; i < Math.max(hi, 0) && !card; i++) {
       if ((m = all[i].match(/כרטיס[^\d|]*(\d{4})(?!\d)/))) card = m[1];
     }
+    // גרסה (ב): מועד חיוב וסה"כ בשורה מעל הטבלה – "עסקאות לחיוב ב-10/07/2026: 8,695.88 ₪"
+    var headBill = '', totals = [];
+    for (var h = 0; h < Math.max(hi, 0); h++) {
+      if ((m = all[h].match(/לחיוב ב-?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/))) {
+        headBill = toDate(m[1]);
+        var rest = all[h].slice(all[h].indexOf(m[1]) + m[1].length);
+        var a = rest.match(/-?[\d,]+\.\d{1,2}/);
+        if (a) totals.push(toNum(a[0]));
+      }
+    }
     var cols = {};
     if (hi >= 0) rows[hi].map(clean).forEach(function (c, ci) {
       COLS.forEach(function (k) { if (k[1].test(c) && !(k[0] in cols)) cols[k[0]] = ci; });
     });
 
-    var txs = [], totals = [];
+    var txs = [];
     for (var r = hi + 1; hi >= 0 && r < rows.length; r++) {
       var row = rows[r] || [], line = all[r];
       if (/סה"כ/.test(line)) {
@@ -682,15 +696,19 @@ var CalExcelParser = (function () {
       if ((m = notes.match(/סכום העסקה הוא\s*([\d.,]+)\s*(\S+)/))) {
         orig = toNum(m[1]);
         cur = CUR[m[2]] || m[2].toUpperCase();
+      } else if ('orig' in cols && !isNaN(toNum(row[cols.orig]))) {
+        orig = toNum(row[cols.orig]);
+        if (Math.abs(orig - ils) > 0.009) cur = 'מט"ח'; // סכום עסקה ≠ סכום חיוב, המטבע לא מצוין בקובץ
       }
       var detail = [];
-      if (type && type !== 'רגילה') detail.push(type);
+      if (type && type !== 'רגילה' && type !== 'שרותים') detail.push(type);
       if (notes) detail.push(notes);
       if ('discount' in cols && toNum(row[cols.discount])) detail.push('הנחה ' + toNum(row[cols.discount]));
       if ('wallet' in cols && clean(row[cols.wallet])) detail.push('מזהה כרטיס בארנק ' + clean(row[cols.wallet]));
       txs.push({
         date: date, merchant: clean(row[cols.merchant]), ils: ils, orig: orig, cur: cur,
-        bill: toDate(row[cols.bill]), mode: /מיידי/.test(type) ? 'מיידי' : 'רגיל', detail: detail.join(' · ')
+        bill: ('bill' in cols ? toDate(row[cols.bill]) : '') || headBill,
+        branch: 'branch' in cols ? clean(row[cols.branch]) : '', mode: /מיידי/.test(type) ? 'מיידי' : 'רגיל', detail: detail.join(' · ')
       });
     }
 
@@ -704,7 +722,7 @@ var CalExcelParser = (function () {
     var records = good.map(function (t) {
       return {
         'מזהה': '', 'כרטיס': card, 'מועד חיוב דף': t.bill, 'סוג': t.mode, 'תאריך עסקה': t.date,
-        'בית עסק': t.merchant, 'ענף': '', 'פירוט': t.detail, 'כרטיס הוצג': '',
+        'בית עסק': t.merchant, 'ענף': t.branch, 'פירוט': t.detail, 'כרטיס הוצג': '',
         'סכום עסקה': isNaN(t.orig) ? '' : t.orig.toFixed(2), 'מטבע': t.cur, 'סכום חיוב ₪': t.ils.toFixed(2),
         'תאריך חיוב': '', 'קובץ מקור': fileName
       };

@@ -181,3 +181,17 @@ ctx.__recs = [twin, Object.assign({}, twin)];
 assert.strictEqual(run('importParsedPdf({fileName:"9999.pdf", records:__recs})').imported, 2);
 assert.strictEqual(run('importParsedPdf({fileName:"9999.pdf", records:__recs})').imported, 0);
 console.log('✓ כפילויות: PDF מול אקסל (11/01 מול 10/01) מזוהה; שתי עסקאות זהות לגיטימיות נשמרות');
+
+// שם שונה בין PDF לאקסל (קיצור / סדר מילים) – עדיין כפילות
+ctx.__recs = [Object.assign({}, recPdf, { 'תאריך עסקה': '22/06/2026', 'בית עסק': 'משרד המשפטים אגרות טאבו ר', 'סכום חיוב ₪': '18.00', 'מועד חיוב דף': '10/07/2026' }),
+  Object.assign({}, recPdf, { 'תאריך עסקה': '22/06/2026', 'בית עסק': '77 TO סופרמרקט', 'סכום חיוב ₪': '32.80', 'מועד חיוב דף': '10/07/2026' })];
+assert.strictEqual(run('importParsedPdf({fileName:"07.pdf", records:__recs})').imported, 2);
+ctx.__recs = [Object.assign({}, ctx.__recs[0], { 'בית עסק': 'משרד המשפטים אגרות טאבו רישום מקרקעין' }),
+  Object.assign({}, ctx.__recs[1], { 'בית עסק': 'TO 77 סופרמרקט' })];
+assert.strictEqual(run('importParsedPdf({fileName:"07.xlsx", records:__recs})').imported, 0, 'renamed duplicates skipped');
+// שתי הוצאות קבועות שונות באותו סכום ובאותו יום – שתיהן נשמרות
+const fx2 = env.__ss.getSheetByName('הוצאות קבועות');
+fx2.getRange(3, 1, 2, 6).setValues([['ועד בית', 'דיור', 300, 1, '2026-01', '2026-01'], ['חוג', 'אחר', 300, 1, '2026-01', '2026-01']]);
+run('buildAnalysisAndDashboard_()');
+assert.strictEqual(tx().filter(r => r[6] === 'ועד בית' || r[6] === 'חוג').length, 2, 'card-less fixed items distinguished by name');
+console.log('✓ כפילויות עם שם שונה מזוהות; הוצאות קבועות באותו סכום נשמרות');
