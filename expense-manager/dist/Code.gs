@@ -1363,7 +1363,9 @@ function buildDashboard_(cats, months, recurring) {
   var m = months.length, monFirst = 11, monLast = 10 + m;
   var MLIST = '$Y$' + monFirst + ':$Y$' + monLast;
   sh.getRange('Y10').setValue('חודשים');
-  sh.getRange(monFirst, 25, m, 1).setNumberFormat('@').setValues(months.map(function (x) { return [x]; }));
+  // מהחדש לישן – כך גם הרשימה הנפתחת: החודש האחרון למעלה
+  var desc = months.slice().reverse();
+  sh.getRange(monFirst, 25, m, 1).setNumberFormat('@').setValues(desc.map(function (x) { return [x]; }));
 
   // בחירת חודש
   sh.getRange('B3').setValue('חודש:').setFontWeight('bold').setHorizontalAlignment('left');
@@ -1374,7 +1376,7 @@ function buildDashboard_(cats, months, recurring) {
     .setBorder(true, true, true, true, null, null, '#1a73e8', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
   sh.getRange('E3').setValue('◄ בחרו חודש מהרשימה').setFontColor('#80868b').setFontSize(9);
   sh.getRange('F3').setValue('חודש קודם:').setHorizontalAlignment('left').setFontColor('#5f6368');
-  sh.getRange(DASH.PREV).setFormula('=IFERROR(IF(MATCH($C$3,' + MLIST + ',0)>1,INDEX(' + MLIST + ',MATCH($C$3,' + MLIST + ',0)-1),""),"")')
+  sh.getRange(DASH.PREV).setFormula('=IFERROR(IF(MATCH($C$3,' + MLIST + ',0)<' + m + ',INDEX(' + MLIST + ',MATCH($C$3,' + MLIST + ',0)+1),""),"")')
     .setFontColor('#5f6368').setNumberFormat('@');
   sh.getRange('N3').setFormula('=' + sumWhere('$G$3')); // סה"כ החודש הקודם (עזר)
   sh.getRange('N2').setValue('סה"כ חודש קודם (עזר)');
@@ -1456,9 +1458,10 @@ function buildDashboard_(cats, months, recurring) {
   sh.getRange('T10:W10').setValues([['חודש', 'ירוק', 'צהוב', 'אדום']]);
   var bars = [];
   for (var i = 1; i <= 6; i++) {
-    var r = 10 + i, pos = 'MATCH($C$3,' + MLIST + ',0)-6+' + i;
+    // שורה 1 = הישן מבין 6 החודשים, שורה 6 = החודש הנבחר (הרשימה מסודרת מהחדש לישן)
+    var r = 10 + i, pos = 'MATCH($C$3,' + MLIST + ',0)+6-' + i;
     var cell = function (color) { return '=IF($T' + r + '="","",' + sumWhere('$T' + r, ',' + COL + '="' + color + '"') + ')'; };
-    bars.push(['=IFERROR(IF(' + pos + '<1,"",INDEX(' + MLIST + ',' + pos + ')),"")', cell('ירוק'), cell('צהוב'), cell('אדום')]);
+    bars.push(['=IFERROR(IF(' + pos + '>' + m + ',"",INDEX(' + MLIST + ',' + pos + ')),"")', cell('ירוק'), cell('צהוב'), cell('אדום')]);
   }
   sh.getRange(11, 20, 6, 4).setFormulas(bars);
   sh.getRange(11, 20, 6, 1).setNumberFormat('@');
