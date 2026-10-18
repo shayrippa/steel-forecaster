@@ -40,7 +40,11 @@ var CalParser = (function () {
   function flip(s) {
     if (!HEB.test(s)) return s;
     var r = s.split('').reverse().join('');
-    r = r.replace(/[A-Za-z0-9$€£₪%][A-Za-z0-9.,:\/%\-+*'&$€£₪]*[A-Za-z0-9$€£₪%]|[A-Za-z0-9]/g, function (m) {
+    // כמה מילים באנגלית ברצף ("Google Pay", "NBA League Pass") הן רצף אחד משמאל לימין; מספרים נפרדים ברווח – לא
+    var LAT = "[A-Za-z0-9.,:\\/%\\-+*'&]*[A-Za-z][A-Za-z0-9.,:\\/%\\-+*'&]*";
+    var RUN = new RegExp(LAT + '(?:\\s+' + LAT + ')+|' +
+      "[A-Za-z0-9$€£₪%][A-Za-z0-9.,:\\/%\\-+*'&$€£₪]*[A-Za-z0-9$€£₪%]|[A-Za-z0-9]", 'g');
+    r = r.replace(RUN, function (m) {
       return m.split('').reverse().join('');
     });
     return r.replace(/[()[\]]/g, function (c) { return { '(': ')', ')': '(', '[': ']', ']': '[' }[c]; });
