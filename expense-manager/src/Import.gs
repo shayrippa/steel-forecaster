@@ -1,6 +1,6 @@
 /**
  * Import.gs – שלב 1: ייבוא עסקאות לגיליון "עסקאות".
- * מקורות: קבצי CSV של הממיר (מתיקיית Drive או מהמחשב), וקבצי PDF של כאל
+ * מקורות: קבצי CSV של הממיר (מתיקיית Drive או מהמחשב), קבצי PDF של כאל ואקסל של ישראכרט
  * שמפוענחים בדפדפן בחלון הייבוא (Import.html) – בלי להתקין כלום במחשב.
  * כללים: שורות "עתידי" לא מיובאות; מזהה/מפתח קיים – מדלגים; ייבוא רק מוסיף.
  */
@@ -34,7 +34,7 @@ function listInbox() {
     var f = it.next();
     var name = f.getName(), mime = f.getMimeType();
     var item = { id: f.getId(), name: name };
-    if (mime === MimeType.PDF || /\.pdf$/i.test(name)) out.pdf.push(item);
+    if (mime === MimeType.PDF || /\.(pdf|xlsx?)$/i.test(name)) out.pdf.push(item); // מפוענחים בדפדפן
     else if (mime === MimeType.CSV || mime === MimeType.GOOGLE_SHEETS || /\.csv$/i.test(name) || mime === 'text/plain') out.csv.push(item);
     else out.other.push(name);
   }
@@ -75,7 +75,8 @@ function importParsedPdf(payload) {
   var res = importRecords_(payload.records || [], payload.fileName);
   if (res.ok) {
     if (payload.fileId) DriveApp.getFileById(payload.fileId).moveTo(ensureFolders_().doneFolder);
-    else if (payload.base64) archiveBlob_(Utilities.newBlob(Utilities.base64Decode(payload.base64), MimeType.PDF, payload.fileName));
+    else if (payload.base64) archiveBlob_(Utilities.newBlob(Utilities.base64Decode(payload.base64),
+      /\.xlsx?$/i.test(payload.fileName) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : MimeType.PDF, payload.fileName));
   }
   return res;
 }

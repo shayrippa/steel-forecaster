@@ -149,3 +149,18 @@ assert.strictEqual(tx().filter(r => r[6] === 'שכירות').length, 6, 'no dupl
 const ms2 = env.__ss.getSheetByName('סיכום חודשי').data;
 assert.ok(ms2.find(r => r[0] === 'דיור')[ms2[0].indexOf('2026-03')] === 5000, 'rent in monthly summary');
 console.log('✓ הוצאות קבועות: 6 חודשי שכירות, בלי כפילויות, בסיכום החודשי');
+
+// ייבוא ישראכרט דרך אותו מסלול: מזהה לפי שובר, ייבוא חוזר לא מכפיל
+const IP = require('../src/isracardParser.js');
+const isr = IP.parse([
+  ['פירוט עסקאות', null, 'נובמבר 2026'], ['X - 1234'], ['לחיוב ב-10.11'],
+  ['תאריך רכישה', 'שם בית עסק', 'סכום עסקה', 'מטבע עסקה', 'סכום חיוב', 'מטבע חיוב', "מס' שובר"],
+  ['16.10.26', 'סלקום ישראל בע"מ', 59, '₪', 59, '₪', '111'],
+  [null, 'סה"כ לחיוב החודש', null, null, 59, '₪']], 'isra.xlsx');
+ctx.__recs = isr.records;
+res = run('importParsedPdf({fileName:"isra.xlsx", records:__recs})');
+assert.strictEqual(res.imported, 1);
+assert.strictEqual(run('importParsedPdf({fileName:"isra.xlsx", records:__recs})').imported, 0);
+run('classifyAll_()');
+assert.strictEqual(tx().find(r => r[0] === 'isra-1234-111')[15], 'חשבונות');
+console.log('✓ ישראכרט: יובא, סווג (סלקום → חשבונות), בלי כפילויות');

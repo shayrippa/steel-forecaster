@@ -3,9 +3,10 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<!-- Import.html – חלון הייבוא: מפענח PDF של כאל בדפדפן (pdf.js) ומייבא גם CSV. -->
+<!-- Import.html – חלון הייבוא: מפענח PDF של כאל (pdf.js) ואקסל של ישראכרט (SheetJS) בדפדפן, ומייבא גם CSV. -->
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root { --g:#34a853; --y:#f9ab00; --r:#ea4335; --ink:#202124; --mut:#5f6368; --line:#dadce0; --blue:#1a73e8; }
   * { box-sizing: border-box; }
@@ -36,8 +37,8 @@
     <h3>קבצים שממתינים בתיקיית Drive</h3>
     <div id="inbox" class="wait">טוען…</div>
     <h3>או – העלאה מהמחשב</h3>
-    <div class="drop" id="drop">גררו לכאן קבצי PDF של כאל (או CSV), או לחצו לבחירה
-      <input type="file" id="file" accept=".pdf,.csv" multiple hidden>
+    <div class="drop" id="drop">גררו לכאן קבצי PDF של כאל או אקסל של ישראכרט (או CSV), או לחצו לבחירה
+      <input type="file" id="file" accept=".pdf,.csv,.xlsx,.xls" multiple hidden>
       <div id="localList" class="muted"></div>
     </div>
   </div>
@@ -63,6 +64,7 @@
 
 <script>
 /*CAL_PARSER*/
+/*ISRACARD_PARSER*/
 </script>
 <script>
 var MODE = '<?= mode ?>';
@@ -90,7 +92,7 @@ run('listInbox').then(function (x) {
   var parts = [];
   x.pdf.forEach(function (f) { parts.push('<li>📄 ' + esc(f.name) + '</li>'); });
   x.csv.forEach(function (f) { parts.push('<li>📊 ' + esc(f.name) + '</li>'); });
-  x.other.forEach(function (n) { parts.push('<li class="bad">' + esc(n) + ' – לא PDF ולא CSV, ידולג</li>'); });
+  x.other.forEach(function (n) { parts.push('<li class="bad">' + esc(n) + ' – לא PDF, אקסל או CSV, ידולג</li>'); });
   $('inbox').className = '';
   $('inbox').innerHTML = (parts.length ? '<ul>' + parts.join('') + '</ul>' : '<span class="muted">התיקייה ריקה.</span>') +
     ' <a class="link" href="' + x.folderUrl + '" target="_blank">פתיחת התיקייה ב-Drive</a>';
@@ -122,10 +124,10 @@ async function start() {
       if (/\.csv$/i.test(f.name)) {
         const text = await f.text();
         await doCsv(f.name, function () { return run('importCsvUpload', f.name, text); });
-      } else if (/\.pdf$/i.test(f.name)) {
+      } else if (/\.(pdf|xlsx?)$/i.test(f.name)) {
         const buf = new Uint8Array(await f.arrayBuffer());
         await doPdf(f.name, async function () { return buf; }, { base64: bytesToB64(buf) });
-      } else addRow(f.name, '', '', '', '', '<span class="bad">לא PDF ולא CSV</span>');
+      } else addRow(f.name, '', '', '', '', '<span class="bad">לא PDF, אקסל או CSV</span>');
     }
     await finish();
   } catch (e) { showErr(e); }
@@ -144,10 +146,18 @@ async function doPdf(name, getBytes, src) {
   const tr = addRow(name, '', '', '…', '', '<span class="wait">מפענח…</span>');
   let parsed;
   try {
-    if (!window.pdfjsLib) throw new Error('ספריית pdf.js לא נטענה (בדקו חיבור לאינטרנט).');
-    const pages = await extractPages(await getBytes());
-    parsed = CalParser.parse(pages, name);
-  } catch (e) { setCell(tr, 5, '<span class="bad">שגיאה בקריאת ה-PDF: ' + esc(e.message || e) + '</span>'); return; }
+    if (/\.xlsx?$/i.test(name)) {
+      if (!window.XLSX) throw new Error('ספריית האקסל לא נטענה (בדקו חיבור לאינטרנט).');
+      const wb = XLSX.read(await getBytes(), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null });
+      if (!IsracardParser.looksLike(rows)) throw new Error('האקסל לא במבנה של ישראכרט ("פירוט עסקאות").');
+      parsed = IsracardParser.parse(rows, name);
+    } else {
+      if (!window.pdfjsLib) throw new Error('ספריית pdf.js לא נטענה (בדקו חיבור לאינטרנט).');
+      const pages = await extractPages(await getBytes());
+      parsed = CalParser.parse(pages, name);
+    }
+  } catch (e) { setCell(tr, 5, '<span class="bad">שגיאה בקריאת הקובץ: ' + esc(e.message || e) + '</span>'); return; }
   const rep = parsed.report;
   setCell(tr, 1, '<input type="text" value="' + esc(rep.card) + '" data-k="card">');
   setCell(tr, 2, '<input type="text" value="' + esc(rep.billDate) + '" data-k="bill">');

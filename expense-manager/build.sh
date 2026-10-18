@@ -11,7 +11,8 @@ node -e '
 const fs=require("fs");
 const html=fs.readFileSync("src/Import.html","utf8");
 const js=fs.readFileSync("src/calParser.js","utf8").replace(/\nif \(typeof module[^\n]*\n?/, "\n");
-fs.writeFileSync("dist/Import.html", html.replace("/*CAL_PARSER*/", () => js));
+const isra=fs.readFileSync("src/isracardParser.js","utf8").replace(/\nif \(typeof module[^\n]*\n?/, "\n");
+fs.writeFileSync("dist/Import.html", html.replace("/*CAL_PARSER*/", () => js).replace("/*ISRACARD_PARSER*/", () => isra));
 '
 cp src/Review.html dist/Review.html
 cp src/appsscript.json dist/appsscript.json
