@@ -12,7 +12,8 @@ const fs=require("fs");
 const html=fs.readFileSync("src/Import.html","utf8");
 const js=fs.readFileSync("src/calParser.js","utf8").replace(/\nif \(typeof module[^\n]*\n?/, "\n");
 const isra=fs.readFileSync("src/isracardParser.js","utf8").replace(/\nif \(typeof module[^\n]*\n?/, "\n");
-fs.writeFileSync("dist/Import.html", html.replace("/*CAL_PARSER*/", () => js).replace("/*ISRACARD_PARSER*/", () => isra));
+const calx=fs.readFileSync("src/calExcelParser.js","utf8").replace(/\nif \(typeof module[^\n]*\n?/, "\n");
+fs.writeFileSync("dist/Import.html", html.replace("/*CAL_PARSER*/", () => js).replace("/*ISRACARD_PARSER*/", () => isra).replace("/*CAL_EXCEL_PARSER*/", () => calx));
 '
 cp src/Review.html dist/Review.html
 cp src/appsscript.json dist/appsscript.json

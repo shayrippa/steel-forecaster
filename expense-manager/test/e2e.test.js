@@ -164,3 +164,20 @@ assert.strictEqual(run('importParsedPdf({fileName:"isra.xlsx", records:__recs})'
 run('classifyAll_()');
 assert.strictEqual(tx().find(r => r[0] === 'isra-1234-111')[15], 'חשבונות');
 console.log('✓ ישראכרט: יובא, סווג (סלקום → חשבונות), בלי כפילויות');
+
+// כפילות בין פורמטים: אותה עסקה מ-PDF (מועד חיוב 11/01) ומאקסל של כאל (מועד חיוב 10/01) – נספרת פעם אחת
+const mk = (bill, src) => H.reduce((o, h) => (o[h] = '', o), {});
+const recPdf = Object.assign(mk(), { 'כרטיס': '9999', 'מועד חיוב דף': '11/01/2026', 'סוג': 'רגיל', 'תאריך עסקה': '23/12/2025', 'בית עסק': 'הפועל אוסישקין', 'סכום חיוב ₪': '33.00' });
+const recXls = Object.assign({}, recPdf, { 'מועד חיוב דף': '10/01/2026', 'בית עסק': 'הפועל אוסישקין ' });
+ctx.__recs = [recPdf];
+assert.strictEqual(run('importParsedPdf({fileName:"9999.pdf", records:__recs})').imported, 1);
+ctx.__recs = [recXls, Object.assign({}, recXls, { 'תאריך עסקה': '24/12/2025' })];
+res = run('importParsedPdf({fileName:"9999.xlsx", records:__recs})');
+assert.strictEqual(res.imported, 1, 'only the genuinely new one');
+assert.strictEqual(res.skipped, 1);
+// שתי עסקאות זהות באותו קובץ – שתיהן נשמרות, וייבוא חוזר לא מוסיף
+const twin = Object.assign({}, recPdf, { 'תאריך עסקה': '05/12/2025', 'בית עסק': 'תן ביס', 'סכום חיוב ₪': '7.00' });
+ctx.__recs = [twin, Object.assign({}, twin)];
+assert.strictEqual(run('importParsedPdf({fileName:"9999.pdf", records:__recs})').imported, 2);
+assert.strictEqual(run('importParsedPdf({fileName:"9999.pdf", records:__recs})').imported, 0);
+console.log('✓ כפילויות: PDF מול אקסל (11/01 מול 10/01) מזוהה; שתי עסקאות זהות לגיטימיות נשמרות');

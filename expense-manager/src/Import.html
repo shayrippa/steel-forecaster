@@ -37,7 +37,7 @@
     <h3>קבצים שממתינים בתיקיית Drive</h3>
     <div id="inbox" class="wait">טוען…</div>
     <h3>או – העלאה מהמחשב</h3>
-    <div class="drop" id="drop">גררו לכאן קבצי PDF של כאל או אקסל של ישראכרט (או CSV), או לחצו לבחירה
+    <div class="drop" id="drop">גררו לכאן קבצי PDF או אקסל של כאל, אקסל של ישראכרט (או CSV), או לחצו לבחירה
       <input type="file" id="file" accept=".pdf,.csv,.xlsx,.xls" multiple hidden>
       <div id="localList" class="muted"></div>
     </div>
@@ -65,6 +65,7 @@
 <script>
 /*CAL_PARSER*/
 /*ISRACARD_PARSER*/
+/*CAL_EXCEL_PARSER*/
 </script>
 <script>
 var MODE = '<?= mode ?>';
@@ -150,8 +151,9 @@ async function doPdf(name, getBytes, src) {
       if (!window.XLSX) throw new Error('ספריית האקסל לא נטענה (בדקו חיבור לאינטרנט).');
       const wb = XLSX.read(await getBytes(), { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null });
-      if (!IsracardParser.looksLike(rows)) throw new Error('האקסל לא במבנה של ישראכרט ("פירוט עסקאות").');
-      parsed = IsracardParser.parse(rows, name);
+      if (IsracardParser.looksLike(rows)) parsed = IsracardParser.parse(rows, name);
+      else if (CalExcelParser.looksLike(rows)) parsed = CalExcelParser.parse(rows, name);
+      else throw new Error('האקסל לא במבנה מוכר (ישראכרט "פירוט עסקאות" או כאל "פירוט עסקאות וזיכויים").');
     } else {
       if (!window.pdfjsLib) throw new Error('ספריית pdf.js לא נטענה (בדקו חיבור לאינטרנט).');
       const pages = await extractPages(await getBytes());
@@ -176,8 +178,13 @@ async function doPdf(name, getBytes, src) {
 async function importPdf(item) {
   const card = item.tr.querySelector('[data-k=card]').value.trim();
   const bill = item.tr.querySelector('[data-k=bill]').value.trim();
+  // ערך שהמשתמש תיקן בחלון גובר; אחרת נשאר מה שנקרא מהקובץ (באקסל של כאל לכל שורה מועד חיוב משלה)
+  const rep = item.parsed.report;
   const records = item.parsed.records.map(function (r) {
-    return Object.assign({}, r, { 'כרטיס': card, 'מועד חיוב דף': bill });
+    return Object.assign({}, r, {
+      'כרטיס': card !== rep.card ? card : r['כרטיס'],
+      'מועד חיוב דף': bill !== rep.billDate ? bill : r['מועד חיוב דף']
+    });
   });
   if (!records.length) { setCell(item.tr, 5, '<span class="bad">לא נמצאו עסקאות – הקובץ לא יובא</span>'); return; }
   setCell(item.tr, 5, '<span class="wait">מייבא…</span>');

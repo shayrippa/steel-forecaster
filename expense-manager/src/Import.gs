@@ -125,7 +125,16 @@ function importRecords_(records, sourceName) {
     var sh = sheet_(SHEETS.TX);
     var existing = readTx_();
     var ids = {}, keys = {};
-    existing.forEach(function (r) { if (r[C.ID]) ids[String(r[C.ID])] = 1; if (r[C.KEY]) keys[String(r[C.KEY])] = 1; });
+    // מפתח "רופף": כרטיס + תאריך + בית עסק + סכום + חודש החיוב (לא היום – באקסל של כאל מועד החיוב
+    // יכול להיות 10/01 ובדף ה-PDF 11/01). סופרים כמה כבר קיימות, כדי ששתי עסקאות זהות לגיטימיות יישמרו.
+    var looseHave = {};
+    existing.forEach(function (r) {
+      if (r[C.ID]) ids[String(r[C.ID])] = 1;
+      if (r[C.KEY]) keys[String(r[C.KEY])] = 1;
+      var lb = looseKey_(r[C.CARD], r[C.DATE], r[C.MERCHANT], r[C.ILS], r[C.BILL]);
+      looseHave[lb] = (looseHave[lb] || 0) + 1;
+    });
+    var looseNew = {};
 
     var occ = {};
     var out = [], skipped = 0, future = 0, bad = 0, sum = 0;
@@ -143,7 +152,9 @@ function importRecords_(records, sourceName) {
       occ[base] = (occ[base] || 0) + 1;
       var key = base + '|' + occ[base];
       var id = String(rec['מזהה'] || '').trim() || md5_(key);
-      if (ids[id] || keys[key]) { skipped++; return; }
+      var lb = looseKey_(card, date, merchant, ils, bill);
+      looseNew[lb] = (looseNew[lb] || 0) + 1;
+      if (ids[id] || keys[key] || looseNew[lb] <= (looseHave[lb] || 0)) { skipped++; return; }
       ids[id] = 1; keys[key] = 1;
 
       var orig = parseAmount_(rec['סכום עסקה']);
@@ -195,6 +206,12 @@ function importRecords_(records, sourceName) {
  *  כדי שהבדלים קטנים בפענוח (רווחים, גרשיים, סוגריים) בין CSV ל-PDF לא ייצרו כפילות */
 function merchantSig_(m) {
   return String(m || '').toLowerCase().replace(/[^a-z0-9\u05d0-\u05ea]/g, '').slice(0, 8);
+}
+
+function looseKey_(card, date, merchant, ils, bill) {
+  var d = date instanceof Date ? date : parseDate_(date), b = bill instanceof Date ? bill : parseDate_(bill);
+  return [String(card || '').replace(/\D/g, '').slice(-4), d ? ymd_(d) : '', merchantSig_(merchant),
+    (Number(ils) || 0).toFixed(2), b ? monthKey_(b) : ''].join('|');
 }
 
 function md5_(s) {
